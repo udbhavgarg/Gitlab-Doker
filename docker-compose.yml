@@ -1,0 +1,87 @@
+version: '3.3'
+
+services:
+  redis:
+    image: redis:6.2
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - /etc/volumes/redis/data:/data
+
+  postgres:
+    image: postgres:14
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: gitlab
+      POSTGRES_PASSWORD: gitlabpassword
+      POSTGRES_DB: gitlabhq_production
+    ports:
+      - "5432:5432"
+    volumes:
+      - /etc/volumes/postgres/data:/var/lib/postgresql/data
+
+  gitlab:
+    image: gitlab/gitlab-ce:latest
+    container_name: gitlab
+    restart: always
+    hostname: registry.finezza.in
+    ports:
+      - "80:80"
+      - "443:443"
+      - "22:22"    # Maps container SSH (port 22) to host port 2222
+      - "5000:5000"  # Maps container Registry (port 5000) to host port 5000
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'https://'
+        registry_external_url 'https://'
+        gitlab_rails['registry_enabled'] = true
+        gitlab_rails['registry_host'] = ""
+        gitlab_rails['registry_path'] = "/var/opt/gitlab/gitlab-rails/shared/registry"
+        registry['enable'] = true
+        registry_nginx['enable'] = true
+        registry['registry_http_addr'] = "0.0.0.0:5000"
+        # Let the container use its default SSH port (22) and map it externally to 2222
+        gitlab_rails['gitlab_shell_ssh_port'] = 22
+        # Database settings—point to the postgres service
+        gitlab_rails['db_adapter'] = 'postgresql'
+        gitlab_rails['db_host'] = 'postgres'
+        gitlab_rails['db_username'] = 'gitlab'
+        gitlab_rails['db_password'] = 'gitlabpassword'
+        gitlab_rails['db_database'] = 'gitlabhq_production'
+        gitlab_rails['db_port'] = 5432
+        # Redis settings—point to the redis service
+        gitlab_rails['redis_host'] = 'redis'
+        gitlab_rails['redis_port'] = 6379
+        #registry['storage'] = {
+        #  's3' => {
+        #    'bucket'    => "",
+        #    'region'    => "",
+        #    'accesskey' => "",
+        #    'secretkey' => "",
+        #    #'endpoint'  => "",
+        #    'secure'    => ,
+        #    'path_style'=> false,
+        #    'rootdirectory' => "",
+        #    'multipartcopychunk' => ,
+        #    'maxparallel' => 
+        #  }
+        #}
+        gitlab_rails['smtp_enable'] = true
+        gitlab_rails['smtp_address'] = "email-smtp.ap-south-1.amazonaws.com"
+        gitlab_rails['smtp_port'] = 587
+        gitlab_rails['smtp_user_name'] = ""
+        gitlab_rails['smtp_password'] = ""
+        gitlab_rails['smtp_domain'] = ""
+        gitlab_rails['smtp_authentication'] = "login"
+        gitlab_rails['smtp_enable_starttls_auto'] = true
+        gitlab_rails['smtp_tls'] = false
+        gitlab_rails['gitlab_email_from'] = ""
+
+    volumes:
+      - /etc/volumes/gitlab/config:/etc/gitlab
+      - /etc/volumes/gitlab/logs:/var/log/gitlab
+      - /etc/volumes/gitlab/data:/var/opt/gitlab
+    shm_size: '256m'
